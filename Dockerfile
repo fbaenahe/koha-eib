@@ -1,35 +1,44 @@
-# Debian testing koha package buggy, for instance REST API not working out of the box
-FROM debian:buster
-MAINTAINER Kedu SCCL "info@kedu.coop"
+FROM debian:bullseye
 
-# https://koha-community.org/
-ARG KOHA_VERSION=21.05
+MAINTAINER Fabian Baena
+
+# ---- Config ----
+ARG KOHA_VERSION=23.11
 ARG PKG_URL=https://debian.koha-community.org/koha
 
-RUN apt-get update && apt-get install -y \
-  wget \
-  gnupg
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN if [ "${PKG_URL}" = "https://debian.koha-community.org/koha" ]; then \
-        wget -q -O- https://debian.koha-community.org/koha/gpg.asc | apt-key add -; \
-    fi
+# ---- Base tools ----
+RUN apt-get update && \
+    apt-get install -y --fix-missing \
+      wget \
+      gnupg \
+      ca-certificates \
+      apt-transport-https && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# ---- Koha GPG ----
+RUN wget -q -O- https://debian.koha-community.org/koha/gpg.asc | apt-key add -
+
+# ---- Koha repo ----
 RUN echo "deb ${PKG_URL} ${KOHA_VERSION} main" | tee /etc/apt/sources.list.d/koha.list
 
-RUN apt-get update && apt-get install -y \
-  koha-common
+# ---- Install Koha ----
+RUN apt-get update && \
+    apt-get install -y --fix-missing --no-install-recommends \
+        koha-common && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN  a2enmod rewrite \
-           headers \
-           proxy_http \
-           cgi \
-    && a2dissite 000-default
+# ---- Apache mods ----
+RUN a2enmod rewrite headers proxy_http cgi && \
+    a2dissite 000-default
 
+# ---- Runtime ----
 RUN mkdir /docker
 
 COPY entrypoint.sh /docker/
-
 COPY templates /templates
+COPY backupdb/init.sql /docker/init.sql
 
 RUN chmod +x /docker/entrypoint.sh
 
