@@ -142,6 +142,27 @@ start_koha() {
     apachectl -D FOREGROUND
 }
 
+
+echo ">>> Waiting for MariaDB..."
+until mysql -h "$DB_HOST" -u root -p"$DB_ROOT_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; do
+  echo "*** Waiting for database..."
+  sleep 2
+done
+
+echo ">>> MariaDB ready"
+
+DBNAME="koha_$LIBRARY_NAME"
+
+EXISTS=$(mysql -h "$DB_HOST" -u root -p"$DB_ROOT_PASSWORD" -e "SHOW DATABASES LIKE '$DBNAME';" | grep "$DBNAME" || true)
+
+if [ -z "$EXISTS" ]; then
+  echo ">>> Restoring template database $DBNAME"
+  mysql -h "$DB_HOST" -u root -p"$DB_ROOT_PASSWORD" < /docker/init.sql
+else
+  echo ">>> Database already exists"
+fi
+
+
 # 1st docker container execution
 if [ ! -f /etc/configured ]; then
     echo "*** Running first time configuration..."
